@@ -10,10 +10,14 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 ---
 ## VGG16 Architeture using Tranfer Learning
 ### Loss Plot of VGG16
-
-
+<p align = 'center'>
+  <img src = './visualization_src/VGG16/LossVal_loss.png' align = 'center'>
+</p>
 
 ### Accuracies Plot of VGG16
+<p align = 'center'>
+  <img src = './visualization_src/VGG16/AccVal_acc.png' align = 'center'>
+</p>
 
 ---
 ## ResNet50 Architeture using Tranfer Learning
