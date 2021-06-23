@@ -22,10 +22,15 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 ---
 ## ResNet50 Architeture using Tranfer Learning
 ### Loss Plot of ResNet50
-
+<p align = 'center'>
+  <img src = './visualization_src/ResNet50/ResNet_Loss.png' align = 'center'>
+</p>
 
 
 ### Accuracies Plot of ResNet50
+<p align = 'center'>
+  <img src = './visualization_src/ResNet50/ResNet50_Accuracy.png' align = 'center'>
+</p>
 
 ---
 ## Evaluation Matrix of VGG16 and ResNet50 Model
@@ -33,4 +38,4 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 | Model Name       | Training Acuuracy  | Test Accuracy |
 | ---------------- | -----------------  | ------------- |
 | VGG16 with TL    |    41.31%          |     43.03%    |
-| ResNet50 with TL |                    |               |
+| ResNet50 with TL |    29.93%          |     29.78%    |
