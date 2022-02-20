@@ -65,5 +65,5 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 | ---------------- | ------------- | ------ | -------------------- |
 | VGG-16 with TL    |     43.03%    |   5    |    Set 100 Epochs    |
 | ResNet-50 with TL |     29.78%    |   5    |    Set 100 Epochs    |
-| Improvement of VGG-16 with TL |     73.9%    |   20    |    Tune more HT    |
-| Improvement of VGG-16 with TL+FT |     76.5%    |   25    |    Tune more HT    |
+| Improvement of VGG-16 with TL |     72.5%    |   20    |    Tune more HT    |
+| Improvement of VGG-16 with TL+FT |     80.8%    |   25    |    Tune more HT    |
