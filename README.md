@@ -10,12 +10,12 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 ---
 ## Introduction of Tranfer Learning and Fine Tuning
 <p align = 'center'>
-  <img src = './visualization_src/VGG16/1_f.jpg' align = 'center'>
+  <img src = './visualization_src/VGG16/2_f.jpg' align = 'center'>
 </p>
 
 ---
 <p align = 'center'>
-  <img src = './visualization_src/VGG16/2_f.jpg' align = 'center'>
+  <img src = './visualization_src/VGG16/1_f.jpg' align = 'center'>
 </p>
 
 ---
