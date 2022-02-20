@@ -10,12 +10,12 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 ---
 ## Introduction of Tranfer Learning and Fine Tuning
 <p align = 'center'>
-  <img src = './visualization_src/VGG16/1_f.png' align = 'center'>
+  <img src = './visualization_src/VGG16/1_f.jpg' align = 'center'>
 </p>
 
 ---
 <p align = 'center'>
-  <img src = './visualization_src/VGG16/2_f.png' align = 'center'>
+  <img src = './visualization_src/VGG16/2_f.jpg' align = 'center'>
 </p>
 
 ---
@@ -48,13 +48,13 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 ## Improve VGG-16 using Tranfer Learning
 ### Loss and Acuuracy Plot of VGG-16 with TF
 <p align = 'center'>
-  <img src = './visualization_src/ResNet50/train_TF.png' align = 'center'>
+  <img src = './visualization_src/VGG16/train_TF.png' align = 'center'>
 </p>
 
 ## Improve VGG-16 using Fine Tuning
 ### Loss and Acuuracy Plot of VGG-16 with FT
 <p align = 'center'>
-  <img src = './visualization_src/ResNet50/FT.png' align = 'center'>
+  <img src = './visualization_src/VGG16/FT.png' align = 'center'>
 </p>
 
 ---
