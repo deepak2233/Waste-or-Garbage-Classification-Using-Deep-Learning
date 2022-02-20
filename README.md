@@ -35,7 +35,9 @@ The problem is preety much stright forward, we all are famelier with Garbage and
 ---
 ## Evaluation Matrix of VGG16 and ResNet50 Model
 
-| Model Name       | Training Acuuracy  | Test Accuracy | Epochs | For improve accuracy |
-| ---------------- | -----------------  | ------------- | ------ | -------------------- |
-| VGG16 with TL    |    41.31%          |     43.03%    |   5    |    Set 100 Epochs    |
-| ResNet50 with TL |    29.93%          |     29.78%    |   5    |    Set 100 Epochs    |
+| Model Name       |Test Accuracy | Epochs | For improve accuracy |
+| ---------------- | ------------- | ------ | -------------------- |
+| VGG-16 with TL    |     43.03%    |   5    |    Set 100 Epochs    |
+| ResNet-50 with TL |     29.78%    |   5    |    Set 100 Epochs    |
+| Improvement of VGG-16 with TL |     73.9%    |   20    |    Tune more HT    |
+| Improvement of VGG-16 with TL+FT |     76.5%    |   25    |    Tune more HT    |
