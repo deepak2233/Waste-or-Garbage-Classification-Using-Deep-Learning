@@ -33,6 +33,11 @@ htmlcov/
 *.keras
 *.tflite
 *.onnx
+
+# The serverless function's model is produced by `wasteclf export`, not
+# committed. Keep the directory, drop everything that lands in it.
+/api/model/*
+!/api/model/.gitkeep
 *.pb
 /saved_model/
 

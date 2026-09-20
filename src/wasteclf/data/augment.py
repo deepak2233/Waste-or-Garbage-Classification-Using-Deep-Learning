@@ -43,7 +43,11 @@ def build_augmentation(cfg: AugmentConfig, seed: int = 42) -> keras.Sequential |
     if cfg.translation > 0:
         blocks.append(
             layers.RandomTranslation(
-                cfg.translation, cfg.translation, fill_mode="reflect", seed=seed, name="aug_translate"
+                cfg.translation,
+                cfg.translation,
+                fill_mode="reflect",
+                seed=seed,
+                name="aug_translate",
             )
         )
     if cfg.contrast > 0:
