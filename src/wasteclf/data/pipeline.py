@@ -12,7 +12,7 @@ all; it lives in the model and is inactive outside training.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import tensorflow as tf
 
@@ -25,19 +25,35 @@ logger = get_logger(__name__)
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-def _decode(path: tf.Tensor, label: tf.Tensor, image_size: tuple[int, int], num_classes: int):
-    """Read, decode and resize one image.
+def _decode_bytes(raw: tf.Tensor, image_size: tuple[int, int]) -> tf.Tensor:
+    """Decode and resize one encoded image to float32 RGB in ``[0, 255]``.
 
-    ``expand_animations=False`` forces a static 3-D shape, which
-    ``decode_image`` otherwise refuses to guarantee for GIFs. ``channels=3``
-    converts greyscale and RGBA to RGB, so a stray PNG with an alpha channel does
-    not produce a 4-channel tensor the backbone cannot consume.
+    JPEGs go through ``decode_jpeg`` with ``INTEGER_ACCURATE`` rather than
+    ``decode_image``. The default fast IDCT disagrees with Pillow's decoder by
+    up to 4/255 on two thirds of pixels, which is enough to move a softmax
+    output by several points. Pinning the accurate method makes this pipeline
+    and the ONNX serving path (which decodes with Pillow) produce identical
+    pixels, so a model behaves the same in both.
+
+    ``channels=3`` converts greyscale and RGBA to RGB, so a stray PNG with an
+    alpha channel does not produce a 4-channel tensor the backbone cannot
+    consume. ``expand_animations=False`` forces a static 3-D shape, which
+    ``decode_image`` otherwise refuses to guarantee for GIFs.
     """
-    raw = tf.io.read_file(path)
-    image = tf.io.decode_image(raw, channels=3, expand_animations=False)
+    image = tf.cond(
+        tf.io.is_jpeg(raw),
+        lambda: tf.io.decode_jpeg(raw, channels=3, dct_method="INTEGER_ACCURATE"),
+        lambda: tf.io.decode_image(raw, channels=3, expand_animations=False),
+    )
     image = tf.image.resize(image, image_size, method="bilinear")
     image = tf.cast(image, tf.float32)
     image.set_shape((*image_size, 3))
+    return image
+
+
+def _decode(path: tf.Tensor, label: tf.Tensor, image_size: tuple[int, int], num_classes: int):
+    """Read one image from disk and one-hot its label."""
+    image = _decode_bytes(tf.io.read_file(path), image_size)
     return image, tf.one_hot(label, num_classes)
 
 

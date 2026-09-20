@@ -10,7 +10,6 @@ at inference as it did during training.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 import keras
@@ -18,6 +17,8 @@ import numpy as np
 import tensorflow as tf
 
 from wasteclf.config import Config
+from wasteclf.data.pipeline import _decode_bytes
+from wasteclf.inference.types import Prediction
 
 # Imported for its side effect: BackbonePreprocessing is decorated with
 # @keras.saving.register_keras_serializable, and the decorator only runs when
@@ -28,34 +29,6 @@ from wasteclf.utils.logging import get_logger
 from wasteclf.utils.run import RunDirectory
 
 logger = get_logger(__name__)
-
-
-@dataclass
-class Prediction:
-    """One image's result."""
-
-    path: str
-    label: str
-    confidence: float
-    #: All class probabilities, highest first.
-    scores: dict[str, float]
-    #: ``True`` when confidence fell below the caller's threshold. The caller
-    #: decides what to do; nothing here silently rewrites the label.
-    low_confidence: bool = False
-
-    @property
-    def runner_up(self) -> tuple[str, float]:
-        items = list(self.scores.items())
-        return items[1] if len(items) > 1 else items[0]
-
-    def to_dict(self) -> dict:
-        return {
-            "path": self.path,
-            "label": self.label,
-            "confidence": round(self.confidence, 4),
-            "low_confidence": self.low_confidence,
-            "scores": {k: round(v, 4) for k, v in self.scores.items()},
-        }
 
 
 class Predictor:
@@ -113,16 +86,16 @@ class Predictor:
 
     def load_image(self, path: str | Path) -> np.ndarray:
         """Read one image into the model's input format: float32 RGB 0-255."""
-        raw = tf.io.read_file(str(path))
-        image = tf.io.decode_image(raw, channels=3, expand_animations=False)
-        image = tf.image.resize(image, self.image_size, method="bilinear")
-        return tf.cast(image, tf.float32).numpy()
+        return self.load_bytes(Path(path).read_bytes())
 
     def load_bytes(self, data: bytes) -> np.ndarray:
-        """Read one image from raw bytes, for the HTTP serving path."""
-        image = tf.io.decode_image(data, channels=3, expand_animations=False)
-        image = tf.image.resize(image, self.image_size, method="bilinear")
-        return tf.cast(image, tf.float32).numpy()
+        """Decode one image from raw bytes.
+
+        Shares :func:`wasteclf.data.pipeline._decode_bytes` with training, so an
+        image goes through exactly the same decode and resize at inference as it
+        did while the weights were being fitted.
+        """
+        return _decode_bytes(tf.constant(data), self.image_size).numpy()
 
     # Prediction -------------------------------------------------------------
 
