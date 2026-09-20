@@ -82,8 +82,24 @@ jobs:
       - name: predict
         run: wasteclf predict --run runs/smoke data/synthetic/glass --json
 
-      - name: export
+      - name: export tflite
         run: wasteclf export --run runs/smoke --format tflite
+
+      - name: export onnx and serve it without TensorFlow
+        run: |
+          wasteclf export --run runs/smoke --format onnx --out api/model
+          # A fresh interpreter with only the serverless runtime on the path:
+          # this fails if anything in the ONNX chain reaches for TensorFlow.
+          python -m venv /tmp/slim
+          /tmp/slim/bin/pip install -q -r api/requirements.txt
+          PYTHONPATH=src /tmp/slim/bin/python -c "
+          import sys
+          from wasteclf.inference.onnx_predictor import OnnxPredictor
+          assert 'tensorflow' not in sys.modules, 'tensorflow leaked into the slim runtime'
+          p = OnnxPredictor.from_dir('api/model')
+          r = p.predict(sorted(__import__('glob').glob('data/synthetic/glass/*.jpg'))[:2])
+          print('onnx predictions:', [(x.label, round(x.confidence, 3)) for x in r])
+          "
 
       - name: Upload run artefacts
         if: always()
