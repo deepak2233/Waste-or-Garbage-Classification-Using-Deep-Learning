@@ -1,0 +1,31 @@
+# VGG16 baseline.
+#
+# Where this project started. Keep it around to compare against, but for new
+# work efficientnetb0 gets more accuracy out of a quarter of the parameters.
+
+seed: 42
+output_dir: runs
+
+data:
+  root: data/raw
+  image_size: [224, 224]
+  batch_size: 32
+
+model:
+  backbone: vgg16
+  weights: imagenet
+  pooling: avg          # the original used flatten: 25,088 features into the head
+  hidden_units: 128
+  dropout: 0.5
+
+train:
+  warmup:
+    epochs: 20
+    learning_rate: 0.001
+  finetune:
+    epochs: 25
+    learning_rate: 0.00001
+    unfreeze_layers: 8  # roughly VGG16 block5
+    freeze_batchnorm: true
+  monitor: val_macro_f1
+  class_weights: true

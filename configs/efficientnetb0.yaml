@@ -1,0 +1,54 @@
+# Recommended starting point for new work.
+#
+# 4.0M parameters against VGG16's 14.7M, and it trains faster while scoring
+# higher on most small image datasets. If you only run one config, run this one.
+#
+# EfficientNet expects inputs in [0, 255]; the model applies its own
+# preprocessing internally, so nothing here needs to know that.
+
+seed: 42
+output_dir: runs
+
+data:
+  root: data/raw
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  image_size: [224, 224]
+  batch_size: 32
+  split_seed: 42
+
+augment:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: false
+  rotation: 0.15
+  zoom: 0.15
+  translation: 0.10
+  contrast: 0.10
+
+model:
+  backbone: efficientnetb0
+  weights: imagenet
+  pooling: avg
+  hidden_units: 128
+  dropout: 0.4
+  label_smoothing: 0.05
+
+train:
+  warmup:
+    epochs: 20
+    learning_rate: 0.001
+    unfreeze_layers: 0
+    freeze_batchnorm: true
+  finetune:
+    epochs: 30
+    learning_rate: 0.00001
+    # EfficientNetB0 has 237 layers; 30 covers roughly the last two blocks.
+    unfreeze_layers: 30
+    freeze_batchnorm: true
+  early_stopping_patience: 8
+  reduce_lr_patience: 4
+  reduce_lr_factor: 0.5
+  class_weights: true
+  monitor: val_macro_f1

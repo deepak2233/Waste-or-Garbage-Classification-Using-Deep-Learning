@@ -1,0 +1,38 @@
+# Tiny, fast configuration for CI and for checking a change end to end.
+# Not meant to produce a usable model.
+
+seed: 0
+output_dir: runs
+run_name: smoke
+
+data:
+  root: data/synthetic
+  image_size: [64, 64]
+  batch_size: 8
+  cache: false
+
+augment:
+  enabled: true
+  rotation: 0.05
+  zoom: 0.05
+  translation: 0.05
+  contrast: 0.0
+
+model:
+  backbone: mobilenetv2
+  weights: null           # no ImageNet download in CI
+  pooling: avg
+  hidden_units: 16
+  dropout: 0.2
+
+train:
+  warmup:
+    epochs: 1
+    learning_rate: 0.001
+  finetune:
+    epochs: 1
+    learning_rate: 0.0001
+    unfreeze_layers: 4
+  early_stopping_patience: 2
+  monitor: val_loss
+  class_weights: true

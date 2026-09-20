@@ -1,0 +1,59 @@
+# Baseline configuration. Every other config in this directory overrides a
+# handful of these values, so read this one first.
+#
+# Override any key from the command line without editing a file:
+#   wasteclf train -c configs/base.yaml --set train.warmup.epochs=2
+
+seed: 42
+output_dir: runs
+run_name: null          # null -> "<backbone>-<UTC timestamp>"
+
+data:
+  root: data/raw        # one subdirectory per class
+  train_split: 0.70
+  val_split: 0.15       # model selection
+  test_split: 0.15      # touched once, at the end
+  image_size: [224, 224]
+  batch_size: 32
+  split_seed: 42        # change this, and the split changes; keep it fixed to compare runs
+  shuffle_buffer: 1000
+  cache: true           # turn off if the dataset does not fit in RAM
+  skip_corrupt: true
+
+augment:
+  enabled: true         # train split only; Keras layers are inert at inference
+  horizontal_flip: true
+  vertical_flip: false  # a bottle photographed upside down is rare; this adds noise
+  rotation: 0.15
+  zoom: 0.15
+  translation: 0.10
+  contrast: 0.10
+  brightness: 0.0
+
+model:
+  backbone: efficientnetb0
+  weights: imagenet
+  pooling: avg          # avg | max | flatten
+  hidden_units: 128
+  dropout: 0.5
+  l2: 0.0
+  label_smoothing: 0.05 # small nudge against overconfidence on a small dataset
+
+train:
+  warmup:               # stage 1: head only, backbone frozen
+    epochs: 20
+    learning_rate: 0.001
+    unfreeze_layers: 0
+    freeze_batchnorm: true
+  finetune:             # stage 2: top of the backbone, much lower LR
+    epochs: 25
+    learning_rate: 0.00001
+    unfreeze_layers: 30
+    freeze_batchnorm: true
+  early_stopping_patience: 8
+  reduce_lr_patience: 4
+  reduce_lr_factor: 0.5
+  min_lr: 0.0000001
+  class_weights: true   # the taxonomy is imbalanced; without this the rare classes are ignored
+  monitor: val_macro_f1 # accuracy rewards ignoring the small classes
+  mixed_precision: false

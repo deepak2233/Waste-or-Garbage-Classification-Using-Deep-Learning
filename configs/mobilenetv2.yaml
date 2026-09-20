@@ -1,0 +1,31 @@
+# Edge target. Pair with `wasteclf export --format tflite`.
+#
+# 2.3M parameters against VGG16's 14.7M, and it quantises to roughly 3 MB, which
+# is what a phone app or a Raspberry Pi on a sorting line needs.
+
+seed: 42
+output_dir: runs
+
+data:
+  root: data/raw
+  image_size: [224, 224]
+  batch_size: 64
+
+model:
+  backbone: mobilenetv2
+  weights: imagenet
+  pooling: avg
+  hidden_units: 128
+  dropout: 0.3
+
+train:
+  warmup:
+    epochs: 20
+    learning_rate: 0.001
+  finetune:
+    epochs: 30
+    learning_rate: 0.0001
+    unfreeze_layers: 40
+    freeze_batchnorm: true
+  monitor: val_macro_f1
+  class_weights: true

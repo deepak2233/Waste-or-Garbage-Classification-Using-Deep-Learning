@@ -1,0 +1,32 @@
+# ResNet50v2.
+#
+# Two things matter when fine-tuning ResNet on a few thousand images: keep
+# BatchNorm frozen, and drop the learning rate hard for the second stage. Adam
+# at its 1e-3 default will undo the pretrained filters in one epoch.
+
+seed: 42
+output_dir: runs
+
+data:
+  root: data/raw
+  image_size: [224, 224]
+  batch_size: 32
+
+model:
+  backbone: resnet50v2  # fine-tunes more stably than v1
+  weights: imagenet
+  pooling: avg
+  hidden_units: 256
+  dropout: 0.4
+
+train:
+  warmup:
+    epochs: 15
+    learning_rate: 0.001
+  finetune:
+    epochs: 30
+    learning_rate: 0.00001
+    unfreeze_layers: 40
+    freeze_batchnorm: true   # mandatory for ResNet on a few thousand images
+  monitor: val_macro_f1
+  class_weights: true
