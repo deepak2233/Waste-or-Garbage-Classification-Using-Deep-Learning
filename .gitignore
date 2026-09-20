@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# Testing / linting
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Project data and artefacts. Anchored with a leading slash so these only
+# match at the repository root; src/wasteclf/data/ is a package, not a dataset.
+/data/*
+!/data/.gitkeep
+/runs/
+/artifacts/
+*.h5
+*.hdf5
+*.keras
+*.tflite
+*.onnx
+*.pb
+/saved_model/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

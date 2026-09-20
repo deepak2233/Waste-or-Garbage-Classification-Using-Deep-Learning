@@ -1,0 +1,14 @@
+.git
+.github
+data
+runs
+artifacts
+legacy
+docs
+tests
+*.ipynb
+__pycache__
+.pytest_cache
+.ruff_cache
+.venv
+venv
