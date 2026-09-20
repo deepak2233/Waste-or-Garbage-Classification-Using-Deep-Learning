@@ -5,8 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import keras
+import numpy as np
 import tensorflow as tf
 
+from wasteclf.models.build import inference_model
 from wasteclf.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -70,4 +72,50 @@ def export_tflite(
     blob = converter.convert()
     target.write_bytes(blob)
     logger.info("TFLite model written to %s (%.1f KB)", target, len(blob) / 1024)
+    return target
+
+
+def export_onnx(
+    model: keras.Model,
+    path: str | Path,
+    image_size: tuple[int, int] | None = None,
+) -> Path:
+    """Convert to ONNX, for serving without TensorFlow.
+
+    onnxruntime plus Pillow is roughly 180 MB installed against 1.2 GB for the
+    TensorFlow stack, which is the difference between fitting in a serverless
+    function and not.
+
+    The augmentation block is stripped first (see
+    :func:`wasteclf.models.build.inference_model`). Leaving it in produces a
+    graph containing random-sampling ops that ONNX has no operator for; the
+    converter drops them and emits a file onnxruntime rejects as invalid.
+
+    Requires the ``onnx`` extra. Note that ``onnx`` must be pinned below 1.18:
+    newer releases need protobuf >= 6, while TensorFlow 2.17 pins protobuf < 5,
+    and the two cannot share an environment.
+
+    Args:
+        model: The trained model.
+        path: Destination ``.onnx`` file.
+        image_size: Input ``(height, width)``. Read from the model when omitted.
+
+    Returns:
+        The written path.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    slim = inference_model(model)
+    height, width = image_size or slim.input_shape[1:3]
+
+    # Keras refuses to export a model it has never called.
+    slim(np.zeros((1, height, width, 3), dtype="float32"))
+
+    try:
+        slim.export(str(target), format="onnx", verbose=False)
+    except ImportError as exc:
+        raise ImportError("ONNX export needs the onnx extra: pip install 'wasteclf[onnx]'") from exc
+
+    logger.info("ONNX model written to %s (%.1f MB)", target, target.stat().st_size / 1e6)
     return target

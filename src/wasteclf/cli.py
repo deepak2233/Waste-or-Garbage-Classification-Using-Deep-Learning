@@ -272,18 +272,39 @@ def cmd_explain(args: argparse.Namespace) -> int:
 
 
 def cmd_export(args: argparse.Namespace) -> int:
-    from wasteclf.inference.export import export_savedmodel, export_tflite
+    from wasteclf.inference.export import export_onnx, export_savedmodel, export_tflite
     from wasteclf.inference.predictor import Predictor
     from wasteclf.utils.run import RunDirectory
 
     setup_logging(logging.INFO)
     run = RunDirectory.open(args.run)
     predictor = Predictor.from_run(args.run)
+    out = Path(args.out) if args.out else run.path
+    out.mkdir(parents=True, exist_ok=True)
 
-    if args.format in {"savedmodel", "both"}:
-        export_savedmodel(predictor.model, run.path / "savedmodel")
-    if args.format in {"tflite", "both"}:
-        export_tflite(predictor.model, run.path / "model.tflite", quantize=not args.no_quantize)
+    wants = {args.format} if args.format != "all" else {"savedmodel", "tflite", "onnx"}
+
+    if "savedmodel" in wants:
+        export_savedmodel(predictor.model, out / "savedmodel")
+    if "tflite" in wants:
+        export_tflite(predictor.model, out / "model.tflite", quantize=not args.no_quantize)
+    if "onnx" in wants:
+        export_onnx(predictor.model, out / "model.onnx", image_size=predictor.image_size)
+        # The ONNX serving path has no run directory to read, so the label order
+        # and input size travel with the model.
+        labels = out / "labels.json"
+        labels.write_text(
+            json.dumps(
+                {
+                    "class_names": predictor.class_names,
+                    "num_classes": len(predictor.class_names),
+                    "image_size": list(predictor.image_size),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(f"wrote {out / 'model.onnx'} and {labels}")
     return 0
 
 
@@ -320,7 +341,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  wasteclf train -c configs/base.yaml --set train.warmup.epochs=2 --set model.backbone=mobilenetv2\n"
             "  wasteclf evaluate --run runs/efficientnetb0-20260920-101500 --split test\n"
             "  wasteclf predict --run runs/latest data/samples/ --json\n"
-            "  wasteclf explain --run runs/latest image.jpg --out explanations/\n"
+            "  wasteclf explain --run runs/latest image.jpg --out explanations/\n  wasteclf export --run runs/latest --format onnx --out api/model\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"wasteclf {__version__}")
@@ -390,9 +411,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_explain.set_defaults(func=cmd_explain)
 
-    p_export = sub.add_parser("export", help="export SavedModel and/or TFLite")
+    p_export = sub.add_parser("export", help="export SavedModel, TFLite or ONNX")
     p_export.add_argument("--run", required=True)
-    p_export.add_argument("--format", default="both", choices=["savedmodel", "tflite", "both"])
+    p_export.add_argument(
+        "--format", default="all", choices=["savedmodel", "tflite", "onnx", "all"]
+    )
+    p_export.add_argument("--out", help="destination directory (defaults to the run directory)")
     p_export.add_argument("--no-quantize", action="store_true", help="skip TFLite quantisation")
     p_export.set_defaults(func=cmd_export)
 

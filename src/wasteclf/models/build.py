@@ -135,6 +135,33 @@ def get_backbone(model: keras.Model) -> keras.Model:
     )
 
 
+def inference_model(model: keras.Model) -> keras.Model:
+    """Return the model with the augmentation block removed.
+
+    Augmentation layers are already inert at inference, so this changes no
+    prediction. It matters for export: tracing them produces
+    ``StatelessRandomUniformV2`` and ``ImageProjectiveTransformV3`` nodes, which
+    have no ONNX equivalent. The converter drops them and writes a file that
+    onnxruntime then refuses to load as an invalid graph.
+
+    The original layer objects are reused, so the returned model shares weights
+    with ``model`` rather than copying them.
+    """
+    if not any(layer.name == "augmentation" for layer in model.layers):
+        return model
+
+    inputs = keras.Input(shape=model.input_shape[1:], name="image")
+    x = inputs
+    for layer in model.layers[1:]:
+        if layer.name == "augmentation":
+            continue
+        x = layer(x)
+
+    stripped = keras.Model(inputs, x, name=f"{model.name}_inference")
+    logger.info("built inference graph without augmentation (%d layers)", len(stripped.layers))
+    return stripped
+
+
 def set_finetune_trainable(
     model: keras.Model, unfreeze_layers: int, freeze_batchnorm: bool = True
 ) -> int:
