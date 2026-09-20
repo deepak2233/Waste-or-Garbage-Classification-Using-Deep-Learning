@@ -1,0 +1,12 @@
+# Keep the function bundle small: only api/ and the package it imports.
+legacy/
+docs/
+tests/
+configs/
+scripts/
+runs/
+data/
+.github/
+Dockerfile
+Makefile
+*.ipynb

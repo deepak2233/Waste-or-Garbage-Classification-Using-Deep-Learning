@@ -1,0 +1,8 @@
+# Runtime for the serverless function only. Deliberately excludes
+# TensorFlow: see the module docstring in index.py. The training
+# dependencies live in pyproject.toml, not here.
+onnxruntime>=1.17,<2
+pillow>=10.0
+numpy>=1.24,<2
+fastapi>=0.110
+python-multipart>=0.0.9
