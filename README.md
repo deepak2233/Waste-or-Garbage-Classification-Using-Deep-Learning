@@ -72,7 +72,7 @@ wasteclf train     -c configs/efficientnetb0.yaml
 wasteclf evaluate  --run runs/<name> --split test
 wasteclf predict   --run runs/<name> path/to/images/ --top2
 wasteclf explain   --run runs/<name> image.jpg --out explanations/
-wasteclf export    --run runs/<name> --format tflite
+wasteclf export    --run runs/<name> --format onnx --out api/model
 wasteclf serve     --run runs/<name> --port 8000
 ```
 
@@ -178,6 +178,29 @@ docker build -t wasteclf .
 docker run -p 8000:8000 -v $(pwd)/runs/<name>:/model:ro wasteclf
 ```
 
+### Serverless
+
+The TensorFlow stack is about 1.2 GB installed, which does not fit in a
+serverless function. Exporting to ONNX drops the runtime to roughly 180 MB,
+which does, and inference gets faster because there is no Keras in the way.
+
+```bash
+wasteclf export --run runs/<name> --format onnx --out api/model
+```
+
+That writes `model.onnx` and `labels.json`. `api/index.py` serves them through
+onnxruntime and never imports TensorFlow; `vercel.json` points at it. The model
+is gitignored, so deploy the repo and the endpoint reports `no_model` on
+`/health` until you export one.
+
+Two things to know before relying on it. The exported graph has the
+augmentation layers stripped, because they contain random-sampling ops that
+ONNX has no operator for and the resulting file will not load. And the ONNX
+path decodes images with Pillow rather than TensorFlow, so the training
+pipeline pins `dct_method="INTEGER_ACCURATE"` to make the two decoders produce
+identical pixels. Without that pin they disagree by up to 4/255 on most pixels,
+which was worth about 0.09 of probability on a test model.
+
 ## How the training works
 
 Two stages. First the classifier head trains with the backbone frozen. Then the
@@ -210,9 +233,10 @@ make test-all    # adds end-to-end training, serving, export
 make lint
 ```
 
-102 tests. The slow ones train a small model on generated data, reload it in a
-fresh subprocess, run Grad-CAM, export to TFLite and hit every HTTP endpoint.
-None of them need the dataset or a network connection.
+111 tests. The slow ones train a small model on generated data, reload it in a
+fresh subprocess, run Grad-CAM, export to TFLite and ONNX, check the ONNX path
+agrees with Keras, and hit every HTTP endpoint. None of them need the dataset
+or a network connection.
 
 ## On the old numbers
 

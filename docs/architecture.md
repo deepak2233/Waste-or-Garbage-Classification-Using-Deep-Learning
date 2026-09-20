@@ -22,9 +22,13 @@ src/wasteclf/
 │   └── plots.py       diagnostic plots
 ├── explain/gradcam.py Grad-CAM
 ├── inference/
-│   ├── predictor.py   load a run, classify images
-│   └── export.py      SavedModel and TFLite
+│   ├── types.py       Prediction, free of TF and onnxruntime
+│   ├── predictor.py   load a run, classify images (Keras)
+│   ├── onnx_predictor.py  the same, through onnxruntime, no TF
+│   └── export.py      SavedModel, TFLite and ONNX
 └── serving/app.py     FastAPI service
+
+api/index.py           serverless entrypoint, ONNX only
 ```
 
 Dependencies point one way: `cli` → `training` → `models` → `data` → `config`.
@@ -129,6 +133,55 @@ runs/efficientnetb0-20260920-101500/
 for the image size, so inference never needs to be told what the model expects.
 It raises if the label count and the model's output width disagree.
 
+## The two inference paths
+
+`Predictor` loads `model.keras` and runs it through Keras. `OnnxPredictor`
+loads an exported `model.onnx` and runs it through onnxruntime. They return the
+same `Prediction` objects and agree to within 1e-4 on identical input arrays.
+
+The second exists because of size. TensorFlow is around 946 MB installed, 1.2 GB
+with the rest of the serving dependencies. onnxruntime, Pillow and NumPy come to
+roughly 180 MB, which is the difference between fitting in a serverless function
+and not. It is also faster per request, since there is no Keras dispatch layer.
+
+Keeping the ONNX path free of TensorFlow takes two deliberate choices.
+`wasteclf/inference/__init__.py` resolves its exports lazily through
+`__getattr__`, because a plain `from .predictor import Predictor` at module
+scope would import Keras the moment anything touched the package. And
+`Prediction` lives in its own `types.py` rather than in `predictor.py`, so both
+predictors can return it without either importing the other's runtime.
+`test_onnx_predictor_imports_without_tensorflow` spawns a subprocess and asserts
+neither module ends up in `sys.modules`.
+
+### Why the export strips augmentation
+
+`inference_model()` rebuilds the graph without the augmentation block before
+exporting. The layers are already inert at inference, so no prediction changes,
+but tracing them emits `StatelessRandomUniformV2` and `ImageProjectiveTransformV3`
+nodes. ONNX has no operator for either. The converter drops them and writes a
+file that onnxruntime rejects outright:
+
+```
+INVALID_GRAPH : No Op registered for StatelessRandomUniformV2
+```
+
+That is the failure mode the export guards against: not a wrong answer, a file
+that will not load at all.
+
+### Why the pipeline pins the JPEG decoder
+
+`tf.io.decode_image` defaults to `INTEGER_FAST`, and the ONNX path decodes with
+Pillow. Measured on the generated dataset, the two disagree on about two thirds
+of pixels by up to 4/255 — small in absolute terms, enough to move a softmax
+output by 0.09 on a test model.
+
+`_decode_bytes()` therefore routes JPEGs through
+`tf.io.decode_jpeg(dct_method="INTEGER_ACCURATE")`, which is bit-identical to
+Pillow's decoder. `Predictor` shares that function with the training pipeline, so all three
+paths see exactly the same pixels.
+`test_jpeg_decode_matches_pillow` asserts the arrays are equal, not merely
+close.
+
 ## Metrics
 
 `val_macro_f1` is the default monitor, not `val_accuracy`. With imbalanced
@@ -144,7 +197,7 @@ for that.
 
 ## Testing
 
-102 tests. `pytest` runs the fast ones; `pytest -m slow` adds the end-to-end
+111 tests. `pytest` runs the fast ones; `pytest -m slow` adds the end-to-end
 training, serving and export tests.
 
 Two are worth singling out, because both cover things a unit test does not see.
