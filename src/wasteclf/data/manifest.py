@@ -14,10 +14,10 @@ from __future__ import annotations
 import csv
 import hashlib
 import random
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Iterable, Sequence
 
 from wasteclf.constants import IMAGE_EXTENSIONS
 from wasteclf.utils.logging import get_logger
@@ -86,7 +86,8 @@ class DatasetManifest:
     @classmethod
     def load(cls, path: str | Path, root: str | Path) -> DatasetManifest:
         """Reload a saved manifest, so evaluation reuses the training split."""
-        rows = list(csv.DictReader(Path(path).open(encoding="utf-8")))
+        with Path(path).open(encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh))
         if not rows:
             raise ValueError(f"manifest {path} is empty")
         names: dict[int, str] = {}
@@ -114,8 +115,8 @@ def _stable_key(relative_path: str) -> str:
     return hashlib.sha256(relative_path.encode("utf-8")).hexdigest()
 
 
-def _allocate(n: int, train_split: float, val_split: float, test_split: float) -> tuple[int, int]:
-    """Split ``n`` images into (train, val) counts; test takes the remainder.
+def _allocate(n: int, val_split: float, test_split: float) -> tuple[int, int]:
+    """Split ``n`` images into (train, val) counts; train takes the remainder.
 
     A class with very few images must still land in val and test, or its
     per-class precision and recall are undefined and the macro average silently
@@ -190,7 +191,9 @@ def build_manifest(
     if abs(total - 1.0) > 1e-6:
         raise ValueError(f"splits must sum to 1.0, got {total}")
 
-    discovered = sorted(d.name for d in root_path.iterdir() if d.is_dir() and not d.name.startswith("."))
+    discovered = sorted(
+        d.name for d in root_path.iterdir() if d.is_dir() and not d.name.startswith(".")
+    )
     if not discovered:
         raise ValueError(f"no class subdirectories under {root_path}")
 
@@ -229,7 +232,7 @@ def build_manifest(
         files.sort(key=_stable_key)
         rng.shuffle(files)
 
-        n_train, n_val = _allocate(len(files), train_split, val_split, test_split)
+        n_train, n_val = _allocate(len(files), val_split, test_split)
 
         for i, rel in enumerate(files):
             if i < n_train:
@@ -243,7 +246,9 @@ def build_manifest(
     if not records:
         raise ValueError(f"no usable images found under {root_path}")
 
-    manifest = DatasetManifest(root=root_path, class_names=names, records=records, rejected=rejected)
+    manifest = DatasetManifest(
+        root=root_path, class_names=names, records=records, rejected=rejected
+    )
     counts = manifest.summary()["per_split"]
     logger.info(
         "scanned %s: %d images across %d classes (train=%d val=%d test=%d, %d rejected)",
