@@ -95,6 +95,10 @@ class ModelConfig:
     #: L2 penalty on the head's dense layers. 0.0 disables it.
     l2: float = 0.0
     label_smoothing: float = 0.0
+    #: Extra keyword arguments handed to the backbone constructor. Only some
+    #: backbones take any; swinconvnext uses these to size its two branches
+    #: (fusion_dim, swin_depths, swin_heads, swin_window, convnext_variant).
+    backbone_kwargs: dict = field(default_factory=dict)
 
     def validate(self) -> None:
         if self.pooling not in {"avg", "max", "flatten"}:

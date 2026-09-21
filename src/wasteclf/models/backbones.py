@@ -46,6 +46,7 @@ class BackboneSpec:
         input_shape: tuple[int, int, int],
         weights: str | None = "imagenet",
         name: str | None = None,
+        **extra,
     ) -> keras.Model:
         """Construct the backbone with its classifier head removed.
 
@@ -54,12 +55,16 @@ class BackboneSpec:
         name after the model is saved and reloaded.
         """
         ctor, _ = self.loader()
-        kwargs = {"input_shape": input_shape, "include_top": False, "weights": weights}
+        kwargs = {"input_shape": input_shape, "include_top": False, "weights": weights, **extra}
         if name is not None:
             try:
                 return ctor(name=name, **kwargs)
             except TypeError:
-                pass  # older Keras: fall through and let get_backbone() find it structurally
+                # Older Keras ignores `name` on applications; fall through and
+                # let get_backbone() find the branch structurally. Re-raise if
+                # the failure was about one of the caller's own kwargs.
+                if extra:
+                    raise
         return ctor(**kwargs)
 
     def preprocess_fn(self) -> Callable:
@@ -115,6 +120,21 @@ def _densenet121() -> tuple[Callable, Callable]:
     return densenet.DenseNet121, densenet.preprocess_input
 
 
+def _swinconvnext() -> tuple[Callable, Callable]:
+    """The fused two-branch backbone.
+
+    Both branches normalise their own input, so the shared preprocessing step
+    is a passthrough. ``include_top`` is accepted and ignored: this constructor
+    only ever returns a feature extractor.
+    """
+    from wasteclf.models.swinconvnext import build_swinconvnext
+
+    def ctor(input_shape, include_top=False, weights="imagenet", name="swinconvnext", **kwargs):  # noqa: ARG001
+        return build_swinconvnext(input_shape=input_shape, weights=weights, name=name, **kwargs)
+
+    return ctor, (lambda x: x)
+
+
 BACKBONES: dict[str, BackboneSpec] = {
     "vgg16": BackboneSpec(
         name="vgg16",
@@ -164,6 +184,13 @@ BACKBONES: dict[str, BackboneSpec] = {
         default_image_size=(224, 224),
         params_millions=5.9,
         notes="Trains faster than v1 and tolerates a higher fine-tuning learning rate.",
+    ),
+    "swinconvnext": BackboneSpec(
+        name="swinconvnext",
+        loader=_swinconvnext,
+        default_image_size=(224, 224),
+        params_millions=56.1,
+        notes="Two-branch ConvNeXt + Swin with spatial attention. Heaviest option; Swin half trains from scratch.",
     ),
     "densenet121": BackboneSpec(
         name="densenet121",

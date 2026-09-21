@@ -60,7 +60,12 @@ def build_model(
 
     x = BackbonePreprocessing(spec.name, name="preprocess")(x)
 
-    backbone = spec.build(input_shape=input_shape, weights=model_cfg.weights, name="backbone")
+    backbone = spec.build(
+        input_shape=input_shape,
+        weights=model_cfg.weights,
+        name="backbone",
+        **(model_cfg.backbone_kwargs or {}),
+    )
     # Stage one always trains the head alone. set_finetune_trainable() reverses
     # this for stage two.
     backbone.trainable = False
