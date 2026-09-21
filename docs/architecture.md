@@ -1,5 +1,10 @@
 # Architecture
 
+This covers the classifier and its supporting machinery. The scene stage and
+the fused two-branch backbone are described in
+[architecture-v3.md](architecture-v3.md).
+
+
 ## Layout
 
 ```

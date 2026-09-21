@@ -1,7 +1,11 @@
 # Waste classification
 
-Sorts images of waste into seven categories (cardboard, compost, glass, metal,
-paper, plastic and trash) using transfer learning on TensorFlow/Keras.
+Finds waste in a photograph of a dump area and sorts each item into twelve
+categories, on TensorFlow/Keras.
+
+Two stages. A segmenter proposes regions in the scene; a classifier names each
+one. The classifier also works standalone on single-object photos, which is
+what the project originally did.
 
 I started this in 2019 as a couple of notebooks. It worked, but it only ever
 worked on my laptop: hardcoded paths, no way to run it twice and get the same
@@ -36,28 +40,32 @@ That generates coloured images, trains a small model on them and writes a
 complete run directory. Under a minute on a laptop CPU. The model is useless.
 The point is that every stage runs.
 
-## With the real data
+## The data
+
+Two datasets. The twelve-class set is the target; TrashNet is smaller, needs no
+credentials, and is the faster one to develop against.
 
 ```bash
-python scripts/fetch_data.py                  # where to download it
-python scripts/fetch_data.py --check data/raw # validate what you unpacked
+# 15,515 images, 12 classes. Needs Kaggle credentials.
+python scripts/fetch_data.py garbage12 --out data/raw
+
+# 2,527 images, 6 classes, public GitHub, no credentials.
+python scripts/fetch_data.py trashnet --out data/trashnet
 ```
 
-One folder per class:
+The twelve categories are battery, biological, brown-glass, cardboard, clothes,
+green-glass, metal, paper, plastic, shoes, trash and white-glass.
 
-```
-data/raw/
-├── cardboard/
-├── compost/
-├── glass/
-└── ...
-```
+Images under `data/` are tracked with Git LFS, so run `git lfs install` and
+`git lfs pull` on a fresh clone. Be aware that the full set is about 2 GB and
+GitHub's free LFS tier is 1 GB of storage and 1 GB of monthly bandwidth;
+re-downloading from source costs nothing and may be the better default.
 
 Then:
 
 ```bash
 wasteclf scan  --data-root data/raw
-wasteclf train -c configs/efficientnetb0.yaml --data-root data/raw
+wasteclf train -c configs/garbage12-fast.yaml --data-root data/raw
 ```
 
 `scan` prints the class counts and the split before you commit to a training
@@ -71,6 +79,7 @@ wasteclf scan      --data-root data/raw --verify
 wasteclf train     -c configs/efficientnetb0.yaml
 wasteclf evaluate  --run runs/<name> --split test
 wasteclf predict   --run runs/<name> path/to/images/ --top2
+wasteclf scene     --run runs/<name> dump.jpg --overlay scenes/
 wasteclf explain   --run runs/<name> image.jpg --out explanations/
 wasteclf export    --run runs/<name> --format onnx --out api/model
 wasteclf serve     --run runs/<name> --port 8000
@@ -133,6 +142,38 @@ confident the model is and how often it is right. Softmax outputs after
 fine-tuning are usually overconfident, and if you plan to auto-accept
 predictions above some threshold you need to know by how much.
 
+## Scene analysis
+
+A single photo of a dump holds many items, so something has to decide where to
+look before anything decides what it is.
+
+```bash
+wasteclf scene --run runs/<name> dump.jpg --overlay scenes/
+```
+
+```
+36 region(s) accepted, 2 below threshold, coverage 75%
+
+class             regions   area share
+--------------------------------------
+paper                  28       77.8%
+cardboard               5       13.9%
+trash                   2        5.6%
+```
+
+Two proposers, neither needing training data. `--segmenter grid` tiles the
+frame. `--segmenter content` (the default) tiles it too, then drops tiles whose
+variance says they are bare ground. On a test scene of fifteen real waste crops
+on a flat background it dropped ten of forty-eight tiles, and those ten held
+0.0% waste against 50.9% for the tiles it kept.
+
+That filtering matters because the classifier is closed-set: a patch of tarmac
+still comes back as one of the twelve classes. `--min-confidence` is the second
+guard, and rejected regions are reported rather than dropped silently.
+
+Composition is weighted by pixel area, not by region count. A grid tile is a
+unit of sampling, not a unit of waste.
+
 ## Backbones
 
 | Backbone | Params | Notes |
@@ -143,6 +184,27 @@ predictions above some threshold you need to know by how much.
 | `resnet50v2` | 23.6M | Fine-tunes more stably than v1 |
 | `densenet121` | 7.0M | Good on paper against cardboard |
 | `vgg16` | 14.7M | Where this started. Kept for comparison. |
+| `swinconvnext` | 56.1M | Two branches fused with spatial attention. See below. |
+
+### SwinConvNeXt
+
+The two-branch backbone from [Kunwar et al., Scientific Reports
+2025](https://www.nature.com/articles/s41598-025-91302-7): pretrained ConvNeXt
+for local material texture, Swin Transformer for global layout, fused through
+CBAM-style spatial attention. The paper reports 98.97% on the twelve-class
+benchmark against roughly 78-80% for either branch alone.
+
+The Swin half is implemented from [the ICCV 2021
+paper](https://arxiv.org/abs/2103.14030) because Keras ships no Swin and the
+checkpoints live on Kaggle Hub. It comes to 27.8M parameters, matching the
+published Swin-T.
+
+**It starts from random weights.** There is no public Keras Swin checkpoint, so
+that branch trains from scratch on 15,000 images, which is not enough for a
+transformer. Do not expect the paper's number without supplying pretrained
+weights. Run `configs/garbage12-fast.yaml` first: one pretrained EfficientNetB0,
+a tenth of the parameters, and it will likely win until the Swin branch has
+weights worth having.
 
 Adding one is a single entry in `BACKBONES` in
 [`src/wasteclf/models/backbones.py`](src/wasteclf/models/backbones.py).
@@ -233,10 +295,10 @@ make test-all    # adds end-to-end training, serving, export
 make lint
 ```
 
-111 tests. The slow ones train a small model on generated data, reload it in a
-fresh subprocess, run Grad-CAM, export to TFLite and ONNX, check the ONNX path
-agrees with Keras, and hit every HTTP endpoint. None of them need the dataset
-or a network connection.
+139 tests. The slow ones train a small model, reload it in a fresh subprocess,
+run Grad-CAM, export to TFLite and ONNX, check the ONNX path agrees with Keras,
+exercise the scene pipeline, and hit every HTTP endpoint. None of them need the
+dataset or a network connection.
 
 ## On the old numbers
 
