@@ -1,0 +1,45 @@
+# Twelve-category taxonomy, single-branch baseline.
+#
+# EfficientNetB0 instead of the fused backbone: about a tenth of the parameters,
+# fully pretrained, and it trains in an afternoon on one GPU. Run this first to
+# get a number on the board, then try configs/garbage12.yaml to see whether the
+# second branch is worth its cost on your data.
+
+seed: 42
+output_dir: runs
+
+data:
+  root: data/raw
+  image_size: [224, 224]
+  batch_size: 32
+  verify_images: true
+
+augment:
+  enabled: true
+  horizontal_flip: true
+  rotation: 0.15
+  zoom: 0.15
+  translation: 0.10
+  contrast: 0.10
+
+model:
+  backbone: efficientnetb0
+  weights: imagenet
+  pooling: avg
+  hidden_units: 256
+  dropout: 0.4
+  label_smoothing: 0.1
+
+train:
+  warmup:
+    epochs: 20
+    learning_rate: 0.001
+    unfreeze_layers: 0
+  finetune:
+    epochs: 30
+    learning_rate: 0.00001
+    unfreeze_layers: 60
+    freeze_batchnorm: true
+  early_stopping_patience: 10
+  class_weights: true
+  monitor: val_macro_f1

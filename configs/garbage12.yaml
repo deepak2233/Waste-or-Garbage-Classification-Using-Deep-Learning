@@ -1,0 +1,71 @@
+# Garbage Classification V2: the twelve-category taxonomy.
+#
+# Get the data first (needs Kaggle credentials):
+#     python scripts/fetch_data.py garbage12 --out data/raw
+#
+# The backbone is the two-branch SwinConvNeXt: pretrained ConvNeXt for local
+# texture, Swin for global layout, fused with spatial attention. Follows
+# Kunwar et al., Scientific Reports 15 (2025), doi:10.1038/s41598-025-91302-7.
+#
+# Expect this to be slow. It is roughly 56M parameters and the Swin branch has
+# no pretrained weights to start from, so it needs a GPU and real patience.
+# For a quick baseline on the same data use configs/garbage12-fast.yaml.
+
+seed: 42
+output_dir: runs
+
+data:
+  root: data/raw
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  image_size: [224, 224]
+  batch_size: 32
+  split_seed: 42
+  verify_images: true
+
+augment:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: false
+  rotation: 0.15
+  zoom: 0.15
+  translation: 0.10
+  contrast: 0.10
+
+model:
+  backbone: swinconvnext
+  weights: imagenet        # ConvNeXt branch only; Swin has no public checkpoint
+  pooling: avg
+  hidden_units: 256
+  dropout: 0.4
+  label_smoothing: 0.1     # 12 classes with visually close pairs (the three glasses)
+  backbone_kwargs:
+    fusion_dim: 256
+    convnext_variant: tiny
+    swin_embed_dim: 96
+    swin_depths: [2, 2, 6, 2]
+    swin_heads: [3, 6, 12, 24]
+    swin_window: 7
+    swin_drop_path: 0.1
+
+train:
+  warmup:
+    epochs: 30
+    learning_rate: 0.001
+    # The Swin branch is random, so freezing the whole backbone would leave it
+    # random. Train it from the start and let the pretrained ConvNeXt side
+    # carry the early epochs.
+    unfreeze_layers: -1
+    freeze_batchnorm: true
+  finetune:
+    epochs: 40
+    learning_rate: 0.00002
+    unfreeze_layers: -1
+    freeze_batchnorm: true
+  early_stopping_patience: 12
+  reduce_lr_patience: 5
+  reduce_lr_factor: 0.5
+  class_weights: true
+  monitor: val_macro_f1
+  mixed_precision: false   # turn on for a GPU with tensor cores

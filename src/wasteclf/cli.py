@@ -249,6 +249,102 @@ def cmd_predict(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scene(args: argparse.Namespace) -> int:
+    """Segment a waste-area photo into regions and classify each one."""
+    import numpy as np
+    from PIL import Image
+
+    from wasteclf.scene import ContentSegmenter, GridSegmenter, ScenePipeline
+
+    setup_logging(logging.WARNING if args.json else logging.INFO)
+
+    if args.onnx:
+        from wasteclf.inference.onnx_predictor import OnnxPredictor
+
+        classifier = OnnxPredictor.from_dir(args.run)
+    else:
+        from wasteclf.inference.predictor import Predictor
+
+        classifier = Predictor.from_run(args.run)
+
+    if args.segmenter == "grid":
+        segmenter = GridSegmenter(args.rows, args.cols, args.overlap)
+    else:
+        segmenter = ContentSegmenter(
+            args.rows, args.cols, args.overlap, args.min_activity, args.keep_top
+        )
+
+    pipeline = ScenePipeline(classifier, segmenter, args.min_confidence, args.batch_size)
+
+    results = {}
+    for item in args.images:
+        result = pipeline.analyse_file(item)
+        results[str(item)] = result.to_dict()
+        if not args.json:
+            print(f"\n{Path(item).name}")
+            print(result.format_summary())
+
+        if args.overlay:
+            out = Path(args.overlay)
+            out.mkdir(parents=True, exist_ok=True)
+            target = out / f"{Path(item).stem}_scene.png"
+            _draw_overlay(np.asarray(Image.open(item).convert("RGB")), result, target)
+            if not args.json:
+                print(f"overlay: {target}")
+
+    if args.json:
+        print(json.dumps(results, indent=2))
+    return 0
+
+
+def _draw_overlay(image, result, path: Path) -> Path:
+    """Draw accepted regions and their labels onto the scene."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.patches as patches
+    import matplotlib.pyplot as plt
+
+    labels = sorted({label for _, label, _ in result.detections})
+    colours = dict(zip(labels, plt.cm.tab20.colors))
+
+    fig, ax = plt.subplots(figsize=(11, 8))
+    ax.imshow(image.astype("uint8"))
+    ax.axis("off")
+
+    for region, label, confidence in result.detections:
+        colour = colours.get(label, "white")
+        ax.add_patch(
+            patches.Rectangle(
+                (region.x, region.y),
+                region.width,
+                region.height,
+                linewidth=1.4,
+                edgecolor=colour,
+                facecolor=colour,
+                alpha=0.22,
+            )
+        )
+        ax.text(
+            region.x + 3,
+            region.y + 13,
+            f"{label} {confidence:.2f}",
+            fontsize=6,
+            color="white",
+            bbox={"facecolor": colour, "alpha": 0.75, "pad": 1, "edgecolor": "none"},
+        )
+
+    ax.set_title(
+        f"{len(result.detections)} regions | "
+        + ", ".join(f"{k} {v:.0%}" for k, v in list(result.composition.items())[:4]),
+        fontsize=10,
+    )
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
 def cmd_explain(args: argparse.Namespace) -> int:
     from wasteclf.explain.gradcam import GradCAM, save_explanation
     from wasteclf.inference.predictor import Predictor
@@ -337,11 +433,13 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  wasteclf scan --data-root data/raw\n"
-            "  wasteclf train -c configs/efficientnetb0.yaml\n"
+            "  wasteclf train -c configs/garbage12-fast.yaml --data-root data/raw\n"
             "  wasteclf train -c configs/base.yaml --set train.warmup.epochs=2 --set model.backbone=mobilenetv2\n"
             "  wasteclf evaluate --run runs/efficientnetb0-20260920-101500 --split test\n"
             "  wasteclf predict --run runs/latest data/samples/ --json\n"
-            "  wasteclf explain --run runs/latest image.jpg --out explanations/\n  wasteclf export --run runs/latest --format onnx --out api/model\n"
+            "  wasteclf explain --run runs/latest image.jpg --out explanations/\n"
+            "  wasteclf scene --run runs/latest dump.jpg --overlay scenes/\n"
+            "  wasteclf export --run runs/latest --format onnx --out api/model\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"wasteclf {__version__}")
@@ -410,6 +508,46 @@ def build_parser() -> argparse.ArgumentParser:
         "--class-index", type=int, help="explain this class instead of the predicted one"
     )
     p_explain.set_defaults(func=cmd_explain)
+
+    p_scene = sub.add_parser("scene", help="segment a waste-area photo and classify every region")
+    p_scene.add_argument(
+        "--run", required=True, help="run directory (or ONNX model dir with --onnx)"
+    )
+    p_scene.add_argument("images", nargs="+", help="scene photographs")
+    p_scene.add_argument(
+        "--segmenter",
+        default="content",
+        choices=["grid", "content"],
+        help="grid tiles everything; content drops low-variance background tiles",
+    )
+    p_scene.add_argument("--rows", type=int, default=6)
+    p_scene.add_argument("--cols", type=int, default=8)
+    p_scene.add_argument(
+        "--overlap",
+        type=float,
+        default=0.0,
+        help="fraction shared between neighbouring tiles, so objects on a boundary are not lost",
+    )
+    p_scene.add_argument(
+        "--min-activity",
+        type=float,
+        default=0.06,
+        help="content segmenter: drop tiles below this variance score",
+    )
+    p_scene.add_argument(
+        "--keep-top", type=int, help="content segmenter: cap the number of tiles kept"
+    )
+    p_scene.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.5,
+        help="regions below this are reported as rejected, not counted",
+    )
+    p_scene.add_argument("--batch-size", type=int, default=32)
+    p_scene.add_argument("--overlay", help="write an annotated image into this directory")
+    p_scene.add_argument("--onnx", action="store_true", help="load an ONNX model directory instead")
+    p_scene.add_argument("--json", action="store_true")
+    p_scene.set_defaults(func=cmd_scene)
 
     p_export = sub.add_parser("export", help="export SavedModel, TFLite or ONNX")
     p_export.add_argument("--run", required=True)
