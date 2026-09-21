@@ -37,6 +37,7 @@ def test_every_subcommand_is_registered():
         "train",
         "evaluate",
         "predict",
+        "scene",
         "explain",
         "export",
         "serve",

@@ -157,3 +157,34 @@ def test_onnx_predictor_imports_without_tensorflow():
     )
     assert done.returncode == 0, done.stderr[-1500:]
     assert "clean" in done.stdout
+
+
+def test_scene_pipeline_runs_on_the_onnx_predictor(onnx_dir, synthetic_root):
+    """The two-stage pipeline must work on the runtime that fits in a function.
+
+    ScenePipeline only needs class_names, image_size and predict_array, so both
+    predictors satisfy it. This is what lets scene analysis deploy serverless.
+    """
+    pytest.importorskip("onnxruntime")
+    from PIL import Image
+
+    from wasteclf.inference.onnx_predictor import OnnxPredictor
+    from wasteclf.scene import ContentSegmenter, ScenePipeline
+
+    # A scene built from real dataset crops on a flat background.
+    rng = np.random.default_rng(0)
+    scene = np.full((96, 128, 3), 110.0, dtype=np.float32)
+    for i, path in enumerate(sorted(synthetic_root.rglob("*.jpg"))[:4]):
+        tile = np.asarray(Image.open(path).convert("RGB").resize((32, 32)), dtype=np.float32)
+        y, x = (i // 2) * 40, (i % 2) * 60
+        scene[y : y + 32, x : x + 32] = tile
+    scene += rng.normal(0, 2, scene.shape)
+
+    predictor = OnnxPredictor.from_dir(onnx_dir)
+    result = ScenePipeline(
+        predictor, ContentSegmenter(3, 4, min_activity=0.02), min_confidence=0.0
+    ).analyse(np.clip(scene, 0, 255))
+
+    assert result.detections
+    assert set(result.class_names) == set(predictor.class_names)
+    assert sum(result.composition.values()) == pytest.approx(1.0, abs=1e-6)

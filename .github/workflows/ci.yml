@@ -82,6 +82,21 @@ jobs:
       - name: predict
         run: wasteclf predict --run runs/smoke data/synthetic/glass --json
 
+      - name: scene analysis
+        run: |
+          # Build a scene by tiling a few generated images into one frame.
+          python - <<'PY'
+          import glob
+          import numpy as np
+          from PIL import Image
+
+          files = sorted(glob.glob("data/synthetic/*/*.jpg"))[:12]
+          tiles = [np.asarray(Image.open(f).convert("RGB").resize((80, 80))) for f in files]
+          rows = [np.hstack(tiles[i : i + 4]) for i in range(0, 12, 4)]
+          Image.fromarray(np.vstack(rows)).save("scene.jpg", quality=92)
+          PY
+          wasteclf scene --run runs/smoke scene.jpg --segmenter grid --rows 3 --cols 4 --json
+
       - name: export tflite
         run: wasteclf export --run runs/smoke --format tflite
 

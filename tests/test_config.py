@@ -56,7 +56,17 @@ def test_bad_monitor_is_rejected():
 
 
 @pytest.mark.parametrize(
-    "name", ["base", "vgg16", "resnet50", "mobilenetv2", "efficientnetb0", "smoke"]
+    "name",
+    [
+        "base",
+        "vgg16",
+        "resnet50",
+        "mobilenetv2",
+        "efficientnetb0",
+        "garbage12",
+        "garbage12-fast",
+        "smoke",
+    ],
 )
 def test_shipped_configs_load(name):
     """Every config in configs/ must parse and validate."""
@@ -70,3 +80,20 @@ def test_config_file_must_be_a_mapping(tmp_path):
     path.write_text(yaml.safe_dump(["a", "list"]), encoding="utf-8")
     with pytest.raises(ConfigError, match="mapping"):
         Config.load(path)
+
+
+def test_backbone_kwargs_reach_the_constructor():
+    """swinconvnext sizes its two branches through these."""
+    cfg = Config.load(
+        None,
+        {
+            "model.backbone": "swinconvnext",
+            "model.backbone_kwargs": {"fusion_dim": 64, "swin_depths": [2, 2]},
+        },
+    )
+    assert cfg.model.backbone_kwargs["fusion_dim"] == 64
+    assert cfg.model.backbone_kwargs["swin_depths"] == [2, 2]
+
+
+def test_backbone_kwargs_default_to_empty():
+    assert Config().model.backbone_kwargs == {}
