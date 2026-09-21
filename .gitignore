@@ -22,12 +22,17 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
-# Project data and artefacts. Anchored with a leading slash so these only
-# match at the repository root; src/wasteclf/data/ is a package, not a dataset.
-/data/*
-!/data/.gitkeep
+# Artefacts. Anchored with a leading slash so these only match at the
+# repository root; src/wasteclf/data/ is a package, not a dataset.
 /runs/
 /artifacts/
+
+# Dataset images are tracked with Git LFS (see .gitattributes), so they are
+# not ignored. Everything else that lands in data/ is.
+/data/*.zip
+/data/*.tar
+/data/*.tar.gz
+/data/**/.ipynb_checkpoints/
 *.h5
 *.hdf5
 *.keras

@@ -1,0 +1,22 @@
+# Dataset images are tracked with Git LFS.
+#
+# Set up once per clone, before pulling data:
+#     git lfs install
+#     git lfs pull
+#
+# Garbage Classification V2 is roughly 15,500 images and about 2 GB. GitHub's
+# free LFS tier gives 1 GB of storage and 1 GB of bandwidth a month, so a full
+# checkout will exceed it and needs a paid data pack. `make data` re-downloads
+# from the source instead, and costs nothing.
+data/**/*.jpg   filter=lfs diff=lfs merge=lfs -text
+data/**/*.jpeg  filter=lfs diff=lfs merge=lfs -text
+data/**/*.png   filter=lfs diff=lfs merge=lfs -text
+data/**/*.bmp   filter=lfs diff=lfs merge=lfs -text
+data/**/*.webp  filter=lfs diff=lfs merge=lfs -text
+
+# Keep text files normalised.
+*.py    text diff=python
+*.md    text
+*.yaml  text
+*.yml   text
+*.json  text
