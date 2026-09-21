@@ -58,6 +58,16 @@ evaluate: ## Evaluate RUN=runs/<name> on the test split
 smoke: synthetic ## End-to-end check on synthetic data
 	$(BIN)/wasteclf train -c configs/smoke.yaml
 
+data: ## Download the 12-class dataset (needs Kaggle credentials)
+	$(BIN)/python scripts/fetch_data.py garbage12 --out $(DATA)
+
+data-trashnet: ## Download TrashNet (public, no credentials)
+	$(BIN)/python scripts/fetch_data.py trashnet --out data/trashnet
+
+scene: ## Analyse a scene: make scene RUN=runs/<name> IMAGE=dump.jpg
+	@test -n "$(RUN)" -a -n "$(IMAGE)" || (echo "usage: make scene RUN=runs/<name> IMAGE=dump.jpg" && exit 1)
+	$(BIN)/wasteclf scene --run $(RUN) $(IMAGE) --overlay scenes/
+
 docker: ## Build the container image
 	docker build -t wasteclf:latest .
 
